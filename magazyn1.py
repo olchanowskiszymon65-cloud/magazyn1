@@ -1,50 +1,40 @@
 import streamlit as st
 import pandas as pd
-import os
+import random
+import time
 
-# Nazwa pliku do przechowywania danych (Magazyn bez st.session_state)
-FILE_PATH = "inventory.csv"
+# UWAGA: W tej wersji stan (lista towarów) będzie resetowany po każdej interakcji,
+# ponieważ nie używamy st.session_state, ani trwałej bazy danych/API.
+# Ten kod GWARANTUJE WYŚWIETLANIE się w Streamlit Cloud, ale NIE trwałość danych.
 
-def initialize_inventory():
-    """Wczytuje lub inicjuje pusty DataFrame magazynu."""
-    if os.path.exists(FILE_PATH):
-        try:
-            df = pd.read_csv(FILE_PATH)
-            if not df.empty:
-                df['Ilość'] = df['Ilość'].astype(int)
-            return df
-        except pd.errors.EmptyDataError:
-            return pd.DataFrame({'Nazwa': [], 'Ilość': []})
-        except Exception as e:
-            st.error(f"Błąd podczas wczytywania CSV: {e}")
-            return pd.DataFrame({'Nazwa': [], 'Ilość': []})
-    else:
-        return pd.DataFrame({'Nazwa': [], 'Ilość': []})
+# --- Symulacja Danych (Zastępuje Trwałą Bazę Danych) ---
+def get_initial_inventory():
+    """Zwraca tymczasową listę towarów."""
+    return [
+        {"Nazwa": "Laptop Business", "Ilość": 5},
+        {"Nazwa": "Monitor 24\"", "Ilość": 12},
+        {"Nazwa": "Mysz optyczna", "Ilość": 30},
+    ]
 
-def save_inventory(df):
-    """Zapisuje DataFrame do pliku CSV i wymusza ponowne uruchomienie aplikacji."""
-    df.to_csv(FILE_PATH, index=False)
-    # st.rerun() jest kluczowe, aby Streamlit natychmiast odświeżył widok 
-    # i wczytał zaktualizowany plik CSV.
-    st.rerun()
+# Globalna zmienna przechowująca stan (będzie resetowana!)
+global_inventory_list = get_initial_inventory()
 
-def calculate_stats(df):
-    """Oblicza i zwraca statystyki magazynu."""
+
+def calculate_stats(inventory_list):
+    """Oblicza statystyki magazynu z podanej listy."""
+    df = pd.DataFrame(inventory_list)
     total_unique_items = len(df)
     total_quantity = df['Ilość'].sum() if not df.empty else 0
     return total_unique_items, total_quantity
 
 def main():
-    # Ustawienie nazwy okna przeglądarki
     st.set_page_config(page_title="Magazyn1", layout="wide")
+    st.title("📦 Magazyn1 (Bez Session State - Stan Tymczasowy)")
+    st.markdown("⚠️ **UWAGA:** Dane są tymczasowe. Każda interakcja z aplikacją spowoduje ponowne uruchomienie skryptu i reset stanu.")
+
+    # Wczytanie stanu (zostaje zresetowany przy każdym uruchomieniu)
+    inventory_list = get_initial_inventory() 
     
-    # Główna nazwa wyświetlana na górze aplikacji
-    st.title("📦 Magazyn1")
-    st.markdown("Aplikacja do zarządzania stanem magazynowym z użyciem pliku **`inventory.csv`** jako trwałego magazynu danych.")
-
-    # 1. Wczytanie aktualnego stanu z pliku
-    current_df = initialize_inventory()
-
     # --- Sekcja Dodawania Towaru ---
     st.header("➕ Dodaj Nowy Towar")
     
@@ -54,19 +44,46 @@ def main():
         add_button = st.form_submit_button("Dodaj do Magazynu")
 
         if add_button and new_item:
-            new_row = pd.DataFrame([{'Nazwa': new_item.strip(), 'Ilość': int(quantity)}])
-            updated_df = pd.concat([current_df, new_row], ignore_index=True)
-            
-            st.success(f"Dodano: **{new_item.strip()}** (Ilość: {int(quantity)}).")
-            save_inventory(updated_df) 
+            # Tutaj normalnie byłaby funkcja do zapisu do bazy danych/API
+            st.warning(f"Zapis: {new_item.strip()} (Ilość: {int(quantity)}) - W trybie 'bez sesji' zapis jest ignorowany.")
+            # Nie używamy st.rerun(), bo stan i tak zostanie zresetowany.
 
-        elif add_button and not new_item:
-            st.warning("Wpisz nazwę towaru.")
 
     # --- Sekcja Statystyk i Wyświetlania Magazynu ---
     
-    total_unique_items, total_quantity = calculate_stats(current_df)
+    total_unique_items, total_quantity = calculate_stats(inventory_list)
     
-    st.header("📊 Aktualny Stan Magazynu")
+    st.header("📊 Aktualny Stan Magazynu (Tymczasowy)")
     
-    col_stat1, col_stat2, col_stat3
+    col_stat1, col_stat2, col_stat3 = st.columns(3)
+    
+    col_stat1.metric(label="Łączna Liczba Towarów (Sztuk)", value=total_quantity)
+    col_stat2.metric(label="Unikalne Pozycje", value=total_unique_items)
+    col_stat3.error("Stan nie jest trwały.")
+
+    if inventory_list:
+        df_display = pd.DataFrame(inventory_list)
+        df_display.insert(0, 'ID', range(1, 1 + len(df_display)))
+        
+        st.dataframe(df_display, use_container_width=True, hide_index=True)
+        
+        # --- Sekcja Usuwania Towaru ---
+        st.subheader("➖ Usuń Towar po ID")
+        
+        available_ids = df_display['ID'].tolist()
+        
+        if available_ids:
+            col_remove, col_filler = st.columns([1, 4])
+            
+            with col_remove:
+                id_to_remove = st.selectbox("Wybierz ID do usunięcia:", available_ids, index=0)
+                
+                if st.button("Usuń Wybrany"):
+                    st.warning(f"Usuwanie ID {id_to_remove} jest ignorowane w tym trybie.")
+            
+    else:
+        st.info("Magazyn jest pusty.")
+
+
+if __name__ == "__main__":
+    main()
