@@ -33,8 +33,11 @@ def calculate_stats(df):
     return total_unique_items, total_quantity
 
 def main():
-    st.set_page_config(page_title="Prosty Magazyn", layout="wide")
-    st.title("📦 Prosty Magazyn (Streamlit - Zapis do CSV)")
+    # Ustawienie nazwy okna przeglądarki
+    st.set_page_config(page_title="Magazyn1", layout="wide")
+    
+    # Główna nazwa wyświetlana na górze aplikacji
+    st.title("📦 Magazyn1")
     st.markdown("Aplikacja do zarządzania stanem magazynowym z użyciem listy (DataFrame) zapisywanej w pliku **`inventory.csv`**.")
 
     # 1. Wczytanie aktualnego stanu z pliku
@@ -60,7 +63,6 @@ def main():
 
     # --- Sekcja Statystyk i Wyświetlania Magazynu ---
     
-    # 2. Obliczenie i wyświetlenie statystyk
     total_unique_items, total_quantity = calculate_stats(current_df)
     
     st.header("📊 Aktualny Stan Magazynu")
@@ -87,25 +89,13 @@ def main():
             col_remove, col_filler = st.columns([1, 4])
             
             with col_remove:
+                # Domyślnie wybieramy pierwszy dostępny ID
                 id_to_remove = st.selectbox("Wybierz ID do usunięcia:", available_ids, index=0)
                 
                 if st.button("Usuń Wybrany"):
+                    # ID jest liczone od 1, indeks listy/DataFrame od 0
                     index_to_remove = id_to_remove - 1 
                     
                     if 0 <= index_to_remove < len(current_df):
                         removed_name = current_df.iloc[index_to_remove]['Nazwa']
-                        
-                        updated_df = current_df.drop(current_df.index[index_to_remove]).reset_index(drop=True)
-                        
-                        st.success(f"Usunięto: **{removed_name}** (ID: {id_to_remove}).")
-                        save_inventory(updated_df) 
-                    else:
-                        st.error("Nieprawidłowy numer ID. Spróbuj ponownie.")
-            
-    else:
-        st.info("Magazyn jest pusty. Dodaj pierwszy towar.")
-
-
-if __name__ == "__main__":
-    main()
 
