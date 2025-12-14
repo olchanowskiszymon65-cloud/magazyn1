@@ -11,19 +11,24 @@ def initialize_inventory():
         try:
             df = pd.read_csv(FILE_PATH)
             if not df.empty:
+                # Upewnienie się, że kolumna 'Ilość' ma typ liczby całkowitej
                 df['Ilość'] = df['Ilość'].astype(int)
             return df
         except pd.errors.EmptyDataError:
+            # Plik istnieje, ale jest pusty
             return pd.DataFrame({'Nazwa': [], 'Ilość': []})
         except Exception as e:
             st.error(f"Błąd podczas wczytywania CSV: {e}")
             return pd.DataFrame({'Nazwa': [], 'Ilość': []})
     else:
+        # Utworzenie pustego DataFrame
         return pd.DataFrame({'Nazwa': [], 'Ilość': []})
 
 def save_inventory(df):
     """Zapisuje DataFrame do pliku CSV i wymusza ponowne uruchomienie aplikacji."""
     df.to_csv(FILE_PATH, index=False)
+    # st.rerun() jest kluczowe, ponieważ ponowne uruchomienie skryptu wymusza 
+    # ponowne wczytanie zaktualizowanego pliku CSV.
     st.rerun()
 
 def calculate_stats(df):
@@ -38,7 +43,7 @@ def main():
     
     # Główna nazwa wyświetlana na górze aplikacji
     st.title("📦 Magazyn1")
-    st.markdown("Aplikacja do zarządzania stanem magazynowym z użyciem listy (DataFrame) zapisywanej w pliku **`inventory.csv`**.")
+    st.markdown("Aplikacja do zarządzania stanem magazynowym. Stan jest zapisywany w pliku **`inventory.csv`**.")
 
     # 1. Wczytanie aktualnego stanu z pliku
     current_df = initialize_inventory()
@@ -55,47 +60,5 @@ def main():
             new_row = pd.DataFrame([{'Nazwa': new_item.strip(), 'Ilość': int(quantity)}])
             updated_df = pd.concat([current_df, new_row], ignore_index=True)
             
-            st.success(f"Dodano: **{new_item.strip()}** (Ilość: {int(quantity)}).")
-            save_inventory(updated_df) 
-
-        elif add_button and not new_item:
-            st.warning("Wpisz nazwę towaru.")
-
-    # --- Sekcja Statystyk i Wyświetlania Magazynu ---
-    
-    total_unique_items, total_quantity = calculate_stats(current_df)
-    
-    st.header("📊 Aktualny Stan Magazynu")
-    
-    col_stat1, col_stat2, col_stat3 = st.columns(3)
-    
-    col_stat1.metric(label="Łączna Liczba Towarów (Sztuk)", value=total_quantity)
-    col_stat2.metric(label="Unikalne Pozycje", value=total_unique_items)
-    col_stat3.info("Stan jest zapisywany w pliku CSV na serwerze.")
-
-    if not current_df.empty:
-        # Kopia DataFrame do wyświetlania i dodania kolumny 'ID'
-        current_df_display = current_df.copy()
-        current_df_display.insert(0, 'ID', range(1, 1 + len(current_df_display)))
-        
-        st.dataframe(current_df_display, use_container_width=True, hide_index=True)
-        
-        # --- Sekcja Usuwania Towaru ---
-        st.subheader("➖ Usuń Towar po ID")
-        
-        available_ids = current_df_display['ID'].tolist()
-        
-        if available_ids:
-            col_remove, col_filler = st.columns([1, 4])
-            
-            with col_remove:
-                # Domyślnie wybieramy pierwszy dostępny ID
-                id_to_remove = st.selectbox("Wybierz ID do usunięcia:", available_ids, index=0)
-                
-                if st.button("Usuń Wybrany"):
-                    # ID jest liczone od 1, indeks listy/DataFrame od 0
-                    index_to_remove = id_to_remove - 1 
-                    
-                    if 0 <= index_to_remove < len(current_df):
-                        removed_name = current_df.iloc[index_to_remove]['Nazwa']
+            st.success(f"Dodano: **{new_item.strip()}** (Ilo
 
