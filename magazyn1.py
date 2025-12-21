@@ -1,40 +1,46 @@
+
 import streamlit as st
 import pandas as pd
-import random
-import time
+import os
 
-# UWAGA: W tej wersji stan (lista towarów) będzie resetowany po każdej interakcji,
-# ponieważ nie używamy st.session_state, ani trwałej bazy danych/API.
-# Ten kod GWARANTUJE WYŚWIETLANIE się w Streamlit Cloud, ale NIE trwałość danych.
+# Nazwa pliku do przechowywania danych
+FILE_PATH = "inventory.csv"
 
-# --- Symulacja Danych (Zastępuje Trwałą Bazę Danych) ---
-def get_initial_inventory():
-    """Zwraca tymczasową listę towarów."""
-    return [
-        {"Nazwa": "Laptop Business", "Ilość": 5},
-        {"Nazwa": "Monitor 24\"", "Ilość": 12},
-        {"Nazwa": "Mysz optyczna", "Ilość": 30},
-    ]
+def initialize_inventory():
+    """Tworzy plik CSV, jeśli nie istnieje, lub wczytuje istniejące dane."""
+    if os.path.exists(FILE_PATH):
+        try:
+            df = pd.read_csv(FILE_PATH)
+            if not df.empty:
+                df['Ilość'] = df['Ilość'].astype(int)
+            return df
+        except pd.errors.EmptyDataError:
+            return pd.DataFrame({'Nazwa': [], 'Ilość': []})
+        except Exception as e:
+            st.error(f"Błąd podczas wczytywania CSV: {e}")
+            return pd.DataFrame({'Nazwa': [], 'Ilość': []})
+    else:
+        return pd.DataFrame({'Nazwa': [], 'Ilość': []})
 
-# Globalna zmienna przechowująca stan (będzie resetowana!)
-global_inventory_list = get_initial_inventory()
+def save_inventory(df):
+    """Zapisuje DataFrame do pliku CSV i wymusza ponowne uruchomienie aplikacji."""
+    df.to_csv(FILE_PATH, index=False)
+    st.rerun()
 
-
-def calculate_stats(inventory_list):
-    """Oblicza statystyki magazynu z podanej listy."""
-    df = pd.DataFrame(inventory_list)
+def calculate_stats(df):
+    """Oblicza i zwraca statystyki magazynu."""
     total_unique_items = len(df)
     total_quantity = df['Ilość'].sum() if not df.empty else 0
     return total_unique_items, total_quantity
 
 def main():
-    st.set_page_config(page_title="Magazyn1", layout="wide")
-    st.title("📦 Magazyn1 (Bez Session State - Stan Tymczasowy)")
-    st.markdown("⚠️ **UWAGA:** Dane są tymczasowe. Każda interakcja z aplikacją spowoduje ponowne uruchomienie skryptu i reset stanu.")
+    st.set_page_config(page_title="Prosty Magazyn", layout="wide")
+    st.title("📦 Prosty Magazyn (Streamlit - Zapis do CSV)")
+    st.markdown("Aplikacja do zarządzania stanem magazynowym z użyciem listy (DataFrame) zapisywanej w pliku **`inventory.csv`**.")
 
-    # Wczytanie stanu (zostaje zresetowany przy każdym uruchomieniu)
-    inventory_list = get_initial_inventory() 
-    
+    # 1. Wczytanie aktualnego stanu z pliku
+    current_df = initialize_inventory()
+
     # --- Sekcja Dodawania Towaru ---
     st.header("➕ Dodaj Nowy Towar")
     
@@ -44,33 +50,39 @@ def main():
         add_button = st.form_submit_button("Dodaj do Magazynu")
 
         if add_button and new_item:
-            # Tutaj normalnie byłaby funkcja do zapisu do bazy danych/API
-            st.warning(f"Zapis: {new_item.strip()} (Ilość: {int(quantity)}) - W trybie 'bez sesji' zapis jest ignorowany.")
-            # Nie używamy st.rerun(), bo stan i tak zostanie zresetowany.
+            new_row = pd.DataFrame([{'Nazwa': new_item.strip(), 'Ilość': int(quantity)}])
+            updated_df = pd.concat([current_df, new_row], ignore_index=True)
+            
+            st.success(f"Dodano: **{new_item.strip()}** (Ilość: {int(quantity)}).")
+            save_inventory(updated_df) 
 
+        elif add_button and not new_item:
+            st.warning("Wpisz nazwę towaru.")
 
     # --- Sekcja Statystyk i Wyświetlania Magazynu ---
     
-    total_unique_items, total_quantity = calculate_stats(inventory_list)
+    # 2. Obliczenie i wyświetlenie statystyk
+    total_unique_items, total_quantity = calculate_stats(current_df)
     
-    st.header("📊 Aktualny Stan Magazynu (Tymczasowy)")
+    st.header("📊 Aktualny Stan Magazynu")
     
     col_stat1, col_stat2, col_stat3 = st.columns(3)
     
     col_stat1.metric(label="Łączna Liczba Towarów (Sztuk)", value=total_quantity)
     col_stat2.metric(label="Unikalne Pozycje", value=total_unique_items)
-    col_stat3.error("Stan nie jest trwały.")
+    col_stat3.info("Stan jest zapisywany w pliku CSV na serwerze.")
 
-    if inventory_list:
-        df_display = pd.DataFrame(inventory_list)
-        df_display.insert(0, 'ID', range(1, 1 + len(df_display)))
+    if not current_df.empty:
+        # Kopia DataFrame do wyświetlania i dodania kolumny 'ID'
+        current_df_display = current_df.copy()
+        current_df_display.insert(0, 'ID', range(1, 1 + len(current_df_display)))
         
-        st.dataframe(df_display, use_container_width=True, hide_index=True)
+        st.dataframe(current_df_display, use_container_width=True, hide_index=True)
         
         # --- Sekcja Usuwania Towaru ---
         st.subheader("➖ Usuń Towar po ID")
         
-        available_ids = df_display['ID'].tolist()
+        available_ids = current_df_display['ID'].tolist()
         
         if available_ids:
             col_remove, col_filler = st.columns([1, 4])
@@ -79,10 +91,20 @@ def main():
                 id_to_remove = st.selectbox("Wybierz ID do usunięcia:", available_ids, index=0)
                 
                 if st.button("Usuń Wybrany"):
-                    st.warning(f"Usuwanie ID {id_to_remove} jest ignorowane w tym trybie.")
+                    index_to_remove = id_to_remove - 1 
+                    
+                    if 0 <= index_to_remove < len(current_df):
+                        removed_name = current_df.iloc[index_to_remove]['Nazwa']
+                        
+                        updated_df = current_df.drop(current_df.index[index_to_remove]).reset_index(drop=True)
+                        
+                        st.success(f"Usunięto: **{removed_name}** (ID: {id_to_remove}).")
+                        save_inventory(updated_df) 
+                    else:
+                        st.error("Nieprawidłowy numer ID. Spróbuj ponownie.")
             
     else:
-        st.info("Magazyn jest pusty.")
+        st.info("Magazyn jest pusty. Dodaj pierwszy towar.")
 
 
 if __name__ == "__main__":
