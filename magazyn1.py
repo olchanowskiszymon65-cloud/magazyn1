@@ -2,18 +2,17 @@ import streamlit as st
 import pandas as pd
 import os
 
-# --- 1. KONFIGURACJA STRONY (Musi być na samej górze!) ---
+# --- 1. KONFIGURACJA STRONY ---
 st.set_page_config(page_title="magazyn", layout="centered")
 
 FILE_PATH = "inventory.csv"
 
-# --- 2. FUNKCJE ZAPISU I ODCZYTU (CSV) ---
+# --- 2. FUNKCJE ZAPISU I ODCZYTU ---
 def load_data():
     if os.path.exists(FILE_PATH):
         try:
             df = pd.read_csv(FILE_PATH)
             if not df.empty:
-                # Konwersja ilości na liczby całkowite
                 df['Ilość'] = pd.to_numeric(df['Ilość'], errors='coerce').fillna(0).astype(int)
             return df
         except:
@@ -24,17 +23,15 @@ def save_data(df):
     df.to_csv(FILE_PATH, index=False)
     st.rerun()
 
-# --- 3. STYLIZACJA CSS (Tło, Czcionki, Kolory) ---
+# --- 3. STYLIZACJA CSS ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap');
 
-    /* Główna czcionka Montserrat */
     html, body, [class*="css"], .stMarkdown, p, div, label {
         font-family: 'Montserrat', sans-serif !important;
     }
 
-    /* Tło: Europejska ciężarówka w firmie logistycznej */
     .stApp {
         background: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), 
         url("https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=2000&auto=format&fit=crop");
@@ -43,7 +40,6 @@ st.markdown("""
         background-attachment: fixed;
     }
 
-    /* Napis magazyn na górze */
     .main-title {
         font-size: 80px !important;
         font-weight: 700 !important;
@@ -55,91 +51,109 @@ st.markdown("""
         letter-spacing: -2px;
     }
 
-    /* Białe kontenery dla czytelności treści */
-    [data-testid="stMetric"], .stForm, .stDataFrame, [data-testid="stExpander"] {
+    [data-testid="stMetric"], .stForm, .stDataFrame, [data-testid="stExpander"], div[data-testid="stTextInput"] {
         background-color: rgba(255, 255, 255, 0.96) !important;
-        padding: 20px !important;
-        border-radius: 15px !important;
+        padding: 15px !important;
+        border-radius: 12px !important;
         box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
         color: #1a1a1a !important;
     }
 
-    /* Kolor tekstów w metrykach i etykietach */
     [data-testid="stMetricValue"], [data-testid="stMetricLabel"], label {
         color: #1a1a1a !important;
     }
 
-    /* Zielony przycisk dodawania */
+    /* Przycisk dodawania (zielony) */
     div.stButton > button:first-child {
         background-color: #2E7D32 !important;
         color: white !important;
         width: 100%;
         font-weight: 700 !important;
         border: none !important;
-        height: 3em !important;
     }
 
-    /* Czerwony przycisk usuwania */
-    [data-testid="stExpander"] button {
-        background-color: #C62828 !important;
-        color: white !important;
-        width: 100%;
-        border: none !important;
+    /* Przycisk usuwania (czerwony) */
+    .stButton button[kind="secondary"] {
+        color: #C62828 !important;
+        font-weight: 600 !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
 # --- 4. INTERFEJS UŻYTKOWNIKA ---
 
-# Wyświetlenie tytułu
 st.markdown('<h1 class="main-title">magazyn</h1>', unsafe_allow_html=True)
 
-# Wczytanie danych
 df = load_data()
 
-# Statystyki na górze
+# Statystyki
 total_types = len(df)
 total_qty = df['Ilość'].sum() if not df.empty else 0
 
-col1, col2 = st.columns(2)
-with col1:
-    st.metric(label="Rodzaje produktów", value=total_types)
-with col2:
-    st.metric(label="Suma wszystkich sztuk", value=total_qty)
+col_m1, col_m2 = st.columns(2)
+col_m1.metric("Rodzaje towarów", total_types)
+col_m2.metric("Łączna liczba sztuk", total_qty)
 
 st.write("")
 
-# Formularz dodawania towaru
-with st.form(key='dodaj_form', clear_on_submit=True):
-    st.markdown("### 📥 Przyjęcie towaru")
-    nazwa = st.text_input("Nazwa przedmiotu", placeholder="Wpisz nazwę...")
-    ilosc = st.number_input("Ilość (szt)", min_value=1, step=1)
-    submit = st.form_submit_button(label="ZATWIERDŹ DOSTAWĘ")
+# --- WYSZUKIWARKA ---
+search_query = st.text_input("🔍 Wyszukaj towar po nazwie...", "").strip().lower()
 
-    if submit:
-        if nazwa.strip():
-            nowy_towar = pd.DataFrame([{'Nazwa': nazwa.strip(), 'Ilość': int(ilosc)}])
+# Filtracja danych na potrzeby widoku
+if search_query:
+    filtered_df = df[df['Nazwa'].str.contains(search_query, case=False, na=False)]
+else:
+    filtered_df = df
+
+# --- FORMULARZ DODAWANIA ---
+with st.form(key='dodaj_form', clear_on_submit=True):
+    st.markdown("### 📥 Nowa dostawa")
+    c1, c2 = st.columns([3, 1])
+    nazwa_input = c1.text_input("Nazwa przedmiotu")
+    ilosc_input = c2.number_input("Ilość", min_value=1, step=1)
+    if st.form_submit_button("ZATWIERDŹ DOSTAWĘ"):
+        if nazwa_input.strip():
+            nowy_towar = pd.DataFrame([{'Nazwa': nazwa_input.strip(), 'Ilość': int(ilosc_input)}])
             df_updated = pd.concat([df, nowy_towar], ignore_index=True)
             save_data(df_updated)
         else:
-            st.error("Błąd: Wpisz nazwę towaru!")
+            st.error("Podaj nazwę towaru!")
 
-# Wyświetlanie tabeli i opcja usuwania
-if not df.empty:
+# --- WYŚWIETLANIE TABELI I ZARZĄDZANIE ---
+if not filtered_df.empty:
     st.markdown("### 📦 Stan ewidencji")
     
-    # Przygotowanie tabeli z ID
-    df_pokaz = df.copy()
-    df_pokaz.insert(0, 'ID', range(1, len(df_pokaz) + 1))
-    
-    st.dataframe(df_pokaz, use_container_width=True, hide_index=True)
+    # Przygotowanie tabeli do wyświetlenia
+    display_df = filtered_df.copy()
+    display_df.insert(0, 'ID', range(1, len(display_df) + 1))
+    st.dataframe(display_df, use_container_width=True, hide_index=True)
 
-    # Panel usuwania
-    with st.expander("🗑️ Zarządzanie brakami / Usuwanie"):
-        wybor_id = st.selectbox("Wybierz ID do usunięcia", options=df_pokaz['ID'].tolist())
-        if st.button("USUŃ TRWALE Z SYSTEMU"):
-            # Indeks w pandas to ID - 1
-            df_final = df.drop(df.index[wybor_id - 1]).reset_index(drop=True)
-            save_data(df_final)
+    # --- PANEL ZARZĄDZANIA ---
+    with st.expander("⚙️ Szybka edycja wybranego towaru"):
+        id_list = display_df['ID'].tolist()
+        wybor_id = st.selectbox("Wybierz ID towaru z tabeli powyżej", id_list)
+        
+        # Znalezienie towaru w oryginalnym DF
+        nazwa_wybrana = display_df[display_df['ID'] == wybor_id]['Nazwa'].values[0]
+        real_idx = df[df['Nazwa'] == nazwa_wybrana].index[0]
+
+        st.write(f"Zarządzasz: **{nazwa_wybrana}** (Stan: {df.at[real_idx, 'Ilość']} szt.)")
+        
+        btn1, btn2, btn3 = st.columns(3)
+        if btn1.button("➕ Dodaj 1"):
+            df.at[real_idx, 'Ilość'] += 1
+            save_data(df)
+            
+        if btn2.button("➖ Odejmij 1"):
+            if df.at[real_idx, 'Ilość'] > 0:
+                df.at[real_idx, 'Ilość'] -= 1
+                save_data(df)
+
+        if btn3.button("🗑️ USUŃ TOWAR", type="secondary"):
+            df = df.drop(real_idx).reset_index(drop=True)
+            save_data(df)
 else:
-    st.info("Magazyn jest pusty. Użyj formularza powyżej, aby dodać towary.")
+    if search_query:
+        st.warning("Nie znaleziono towaru o takiej nazwie.")
+    else:
+        st.info("Magazyn jest pusty.")
