@@ -4,26 +4,19 @@ import pandas as pd
 # --- 1. KONFIGURACJA STRONY ---
 st.set_page_config(page_title="magazyn", layout="centered")
 
-# --- 2. LOGIKA BEZ ZAPISU (RESETOWANIE) ---
-# Używamy cache, aby dane "żyły" tylko w obrębie działającej aplikacji, 
-# ale bez zapisywania ich do pliku na dysku.
-if 'temp_inventory' not in st.session_state:
-    st.session_state.temp_inventory = pd.DataFrame({'Nazwa': [], 'Ilość': []})
+# --- 2. LOGIKA SESJI (RESET PO ODŚWIEŻENIU) ---
+if 'inventory' not in st.session_state:
+    st.session_state.inventory = pd.DataFrame(columns=['Nazwa', 'Ilość'])
 
-def get_data():
-    return st.session_state.temp_inventory
-
-def update_data(new_df):
-    st.session_state.temp_inventory = new_df
-    # Nie używamy st.rerun(), bo zmiana w session_state sama odświeży widok
-
-# --- 3. STYLIZACJA CSS ---
+# --- 3. STYLIZACJA CSS (PRZYWRÓCENIE CZYTELNOŚCI) ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap');
 
-    html, body, [class*="css"], .stMarkdown, p, div, label {
+    /* Wymuszenie czcionki Montserrat i czarnego koloru tekstu */
+    html, body, [class*="css"], .stMarkdown, p, div, label, .stMetric {
         font-family: 'Montserrat', sans-serif !important;
+        color: #000000 !important;
     }
 
     .stApp {
@@ -37,7 +30,7 @@ st.markdown("""
     .main-title {
         font-size: 80px !important;
         font-weight: 700 !important;
-        color: white !important;
+        color: #ffffff !important; /* Napis główny pozostaje biały */
         text-align: center;
         margin-top: -50px;
         margin-bottom: 30px;
@@ -45,20 +38,35 @@ st.markdown("""
         letter-spacing: -2px;
     }
 
+    /* Kontenery: Maksymalna czytelność - białe tło, czarny tekst */
     [data-testid="stMetric"], .stForm, .stDataFrame, [data-testid="stExpander"], div[data-testid="stTextInput"] {
-        background-color: rgba(255, 255, 255, 0.96) !important;
-        padding: 15px !important;
+        background-color: rgba(255, 255, 255, 1.0) !important;
+        padding: 20px !important;
         border-radius: 12px !important;
         box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
-        color: #1a1a1a !important;
     }
 
-    div.stButton > button:first-child {
+    /* Napisy w metrykach */
+    [data-testid="stMetricValue"] {
+        color: #000000 !important;
+        font-weight: 700 !important;
+    }
+    [data-testid="stMetricLabel"] {
+        color: #333333 !important;
+    }
+
+    /* Przyciski */
+    div.stButton > button {
         background-color: #2E7D32 !important;
         color: white !important;
-        width: 100%;
         font-weight: 700 !important;
+        border-radius: 8px !important;
         border: none !important;
+    }
+    
+    .stButton button[kind="secondary"] {
+        background-color: #C62828 !important;
+        color: white !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -67,22 +75,21 @@ st.markdown("""
 
 st.markdown('<h1 class="main-title">magazyn</h1>', unsafe_allow_html=True)
 
-# Pobranie danych z pamięci
-df = get_data()
-
-# Statystyki
+# Statystyki z Session State
+df = st.session_state.inventory
 total_types = len(df)
 total_qty = df['Ilość'].sum() if not df.empty else 0
 
 col_m1, col_m2 = st.columns(2)
-col_m1.metric("Rodzaje towarów", int(total_types))
-col_m2.metric("Łączna liczba sztuk", int(total_qty))
+col_m1.metric("Rodzaje towarów", total_types)
+col_m2.metric("Łączna liczba sztuk", total_qty)
 
 st.write("")
 
 # --- WYSZUKIWARKA ---
-search_query = st.text_input("🔍 Wyszukaj towar (reset po odświeżeniu)...", "").strip().lower()
+search_query = st.text_input("🔍 Wyszukaj towar (resetuje się po F5)...", "").strip().lower()
 
+# Filtracja widoku
 if search_query:
     filtered_df = df[df['Nazwa'].str.contains(search_query, case=False, na=False)]
 else:
@@ -90,21 +97,20 @@ else:
 
 # --- FORMULARZ DODAWANIA ---
 with st.form(key='dodaj_form', clear_on_submit=True):
-    st.markdown("### 📥 Nowa dostawa (tymczasowa)")
+    st.markdown("### 📥 Nowa dostawa")
     c1, c2 = st.columns([3, 1])
     nazwa_input = c1.text_input("Nazwa przedmiotu")
     ilosc_input = c2.number_input("Ilość", min_value=1, step=1)
     
-    if st.form_submit_button("ZATWIERDŹ DOSTAWĘ"):
+    if st.form_submit_button("ZATWIERDŹ"):
         if nazwa_input.strip():
             new_row = pd.DataFrame([{'Nazwa': nazwa_input.strip(), 'Ilość': int(ilosc_input)}])
-            df = pd.concat([df, new_row], ignore_index=True)
-            update_data(df)
+            st.session_state.inventory = pd.concat([st.session_state.inventory, new_row], ignore_index=True)
             st.rerun()
         else:
             st.error("Podaj nazwę towaru!")
 
-# --- WYŚWIETLANIE TABELI ---
+# --- TABELA I EDYCJA ---
 if not filtered_df.empty:
     st.markdown("### 📦 Stan ewidencji")
     
@@ -112,29 +118,29 @@ if not filtered_df.empty:
     display_df.insert(0, 'ID', range(1, len(display_df) + 1))
     st.dataframe(display_df, use_container_width=True, hide_index=True)
 
-    with st.expander("⚙️ Szybka edycja"):
-        id_list = display_df['ID'].tolist()
-        wybor_id = st.selectbox("Wybierz ID", id_list)
+    with st.expander("⚙️ Zarządzaj towarem"):
+        wybor_id = st.selectbox("Wybierz ID towaru", display_df['ID'].tolist())
         
-        # Logika wyboru towaru
-        nazwa_wybrana = display_df[display_df['ID'] == wybor_id]['Nazwa'].values[0]
-        real_idx = df[df['Nazwa'] == nazwa_wybrana].index[0]
+        # Pobranie danych wybranego wiersza
+        row_data = display_df[display_df['ID'] == wybor_id]
+        nazwa_wybrana = row_data['Nazwa'].values[0]
+        # Znalezienie indeksu w oryginalnym DataFrame
+        real_idx = st.session_state.inventory[st.session_state.inventory['Nazwa'] == nazwa_wybrana].index[0]
 
+        st.write(f"Produkt: **{nazwa_wybrana}**")
+        
         b1, b2, b3 = st.columns(3)
         if b1.button("➕ Dodaj 1"):
-            df.at[real_idx, 'Ilość'] += 1
-            update_data(df)
+            st.session_state.inventory.at[real_idx, 'Ilość'] += 1
             st.rerun()
             
         if b2.button("➖ Odejmij 1"):
-            if df.at[real_idx, 'Ilość'] > 0:
-                df.at[real_idx, 'Ilość'] -= 1
-                update_data(df)
+            if st.session_state.inventory.at[real_idx, 'Ilość'] > 0:
+                st.session_state.inventory.at[real_idx, 'Ilość'] -= 1
                 st.rerun()
 
-        if b3.button("🗑️ USUŃ"):
-            df = df.drop(real_idx).reset_index(drop=True)
-            update_data(df)
+        if b3.button("🗑️ USUŃ", kind="secondary"):
+            st.session_state.inventory = st.session_state.inventory.drop(real_idx).reset_index(drop=True)
             st.rerun()
 else:
-    st.info("Magazyn jest pusty. Dane znikną po odświeżeniu strony.")
+    st.info("Magazyn jest pusty. Dane zostaną wyczyszczone po odświeżeniu strony (F5).")
