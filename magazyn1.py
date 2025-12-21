@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import os
@@ -6,106 +5,115 @@ import os
 # Nazwa pliku do przechowywania danych
 FILE_PATH = "inventory.csv"
 
-def initialize_inventory():
-    """Tworzy plik CSV, jeśli nie istnieje, lub wczytuje istniejące dane."""
+def load_data():
     if os.path.exists(FILE_PATH):
         try:
             df = pd.read_csv(FILE_PATH)
             if not df.empty:
-                df['Ilość'] = df['Ilość'].astype(int)
+                df['Ilość'] = pd.to_numeric(df['Ilość'], errors='coerce').fillna(0).astype(int)
             return df
-        except pd.errors.EmptyDataError:
+        except Exception:
             return pd.DataFrame({'Nazwa': [], 'Ilość': []})
-        except Exception as e:
-            st.error(f"Błąd podczas wczytywania CSV: {e}")
-            return pd.DataFrame({'Nazwa': [], 'Ilość': []})
-    else:
-        return pd.DataFrame({'Nazwa': [], 'Ilość': []})
+    return pd.DataFrame({'Nazwa': [], 'Ilość': []})
 
-def save_inventory(df):
-    """Zapisuje DataFrame do pliku CSV i wymusza ponowne uruchomienie aplikacji."""
+def save_data(df):
     df.to_csv(FILE_PATH, index=False)
     st.rerun()
 
-def calculate_stats(df):
-    """Oblicza i zwraca statystyki magazynu."""
-    total_unique_items = len(df)
-    total_quantity = df['Ilość'].sum() if not df.empty else 0
-    return total_unique_items, total_quantity
-
 def main():
-    st.set_page_config(page_title="Prosty Magazyn", layout="wide")
-    st.title("📦 Prosty Magazyn (Streamlit - Zapis do CSV)")
-    st.markdown("Aplikacja do zarządzania stanem magazynowym z użyciem listy (DataFrame) zapisywanej w pliku **`inventory.csv`**.")
+    # 1. Konfiguracja strony
+    st.set_page_config(page_title="magazyn", layout="centered")
 
-    # 1. Wczytanie aktualnego stanu z pliku
-    current_df = initialize_inventory()
+    # 2. Stylizacja CSS (Kolory i tło z ciężarówką)
+    st.markdown("""
+        <style>
+        /* Tło z ciężarówką */
+        .stApp {
+            background: linear-gradient(rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.1)), 
+            url("https://images.unsplash.com/photo-1519003722824-194d4455a60c?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&q=80");
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }
 
-    # --- Sekcja Dodawania Towaru ---
-    st.header("➕ Dodaj Nowy Towar")
-    
-    with st.form(key='add_item_form', clear_on_submit=True):
-        new_item = st.text_input("Nazwa Towaru", placeholder="Wpisz np. Klawiatura bezprzewodowa")
-        quantity = st.number_input("Ilość", min_value=1, value=1, step=1)
-        add_button = st.form_submit_button("Dodaj do Magazynu")
+        /* Stylizacja nagłówka głównego */
+        .main-title {
+            font-size: 50px !important;
+            font-weight: 700 !important;
+            color: #1E1E1E !important;
+            text-align: center;
+            margin-bottom: 30px;
+            text-transform: lowercase;
+        }
 
-        if add_button and new_item:
-            new_row = pd.DataFrame([{'Nazwa': new_item.strip(), 'Ilość': int(quantity)}])
-            updated_df = pd.concat([current_df, new_row], ignore_index=True)
-            
-            st.success(f"Dodano: **{new_item.strip()}** (Ilość: {int(quantity)}).")
-            save_inventory(updated_df) 
-
-        elif add_button and not new_item:
-            st.warning("Wpisz nazwę towaru.")
-
-    # --- Sekcja Statystyk i Wyświetlania Magazynu ---
-    
-    # 2. Obliczenie i wyświetlenie statystyk
-    total_unique_items, total_quantity = calculate_stats(current_df)
-    
-    st.header("📊 Aktualny Stan Magazynu")
-    
-    col_stat1, col_stat2, col_stat3 = st.columns(3)
-    
-    col_stat1.metric(label="Łączna Liczba Towarów (Sztuk)", value=total_quantity)
-    col_stat2.metric(label="Unikalne Pozycje", value=total_unique_items)
-    col_stat3.info("Stan jest zapisywany w pliku CSV na serwerze.")
-
-    if not current_df.empty:
-        # Kopia DataFrame do wyświetlania i dodania kolumny 'ID'
-        current_df_display = current_df.copy()
-        current_df_display.insert(0, 'ID', range(1, 1 + len(current_df_display)))
+        /* Półprzezroczyste kontenery dla czytelności */
+        div[data-testid="stVerticalBlock"] > div:has(div.stMetric), 
+        .stForm, .stDataFrame {
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
         
-        st.dataframe(current_df_display, use_container_width=True, hide_index=True)
+        /* Stylizacja przycisków */
+        .stButton>button {
+            border-radius: 8px;
+            border: none;
+            font-weight: 600;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # Napis na górze (bez nawiasów i ikon)
+    st.markdown('<p class="main-title">magazyn</p>', unsafe_allow_html=True)
+
+    # Wczytanie danych
+    inventory_df = load_data()
+
+    # --- STATYSTYKI ---
+    total_types = len(inventory_df)
+    total_units = inventory_df['Ilość'].sum() if not inventory_df.empty else 0
+
+    col1, col2 = st.columns(2)
+    col1.metric("Rodzaje towarów", total_types)
+    col2.metric("Suma sztuk", total_units)
+
+    st.write("") # Odstęp
+
+    # --- DODAWANIE ---
+    with st.form("add_form", clear_on_submit=True):
+        st.subheader("Dodaj nową dostawę")
+        c1, c2 = st.columns([3, 1])
+        name_input = c1.text_input("Nazwa przedmiotu")
+        qty_input = c2.number_input("Ilość", min_value=1, step=1)
         
-        # --- Sekcja Usuwania Towaru ---
-        st.subheader("➖ Usuń Towar po ID")
+        if st.form_submit_button("Zatwierdź"):
+            if name_input.strip():
+                new_entry = pd.DataFrame([{'Nazwa': name_input.strip(), 'Ilość': int(qty_input)}])
+                updated_df = pd.concat([inventory_df, new_entry], ignore_index=True)
+                save_data(updated_df)
+            else:
+                st.error("Wpisz nazwę!")
+
+    # --- WYŚWIETLANIE I USUWANIE ---
+    if not inventory_df.empty:
+        st.write("")
+        st.subheader("Aktualna lista")
         
-        available_ids = current_df_display['ID'].tolist()
+        display_df = inventory_df.copy()
+        display_df.insert(0, 'ID', range(1, len(display_df) + 1))
         
-        if available_ids:
-            col_remove, col_filler = st.columns([1, 4])
-            
-            with col_remove:
-                id_to_remove = st.selectbox("Wybierz ID do usunięcia:", available_ids, index=0)
-                
-                if st.button("Usuń Wybrany"):
-                    index_to_remove = id_to_remove - 1 
-                    
-                    if 0 <= index_to_remove < len(current_df):
-                        removed_name = current_df.iloc[index_to_remove]['Nazwa']
-                        
-                        updated_df = current_df.drop(current_df.index[index_to_remove]).reset_index(drop=True)
-                        
-                        st.success(f"Usunięto: **{removed_name}** (ID: {id_to_remove}).")
-                        save_inventory(updated_df) 
-                    else:
-                        st.error("Nieprawidłowy numer ID. Spróbuj ponownie.")
-            
+        # Tabela
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+        # Usuwanie
+        with st.expander("Panel zarządzania"):
+            id_to_del = st.selectbox("Wybierz ID do usunięcia", display_df['ID'].tolist())
+            if st.button("Usuń trwale", type="primary"):
+                updated_df = inventory_df.drop(inventory_df.index[id_to_del - 1]).reset_index(drop=True)
+                save_data(updated_df)
     else:
-        st.info("Magazyn jest pusty. Dodaj pierwszy towar.")
-
+        st.info("Brak towarów w magazynie.")
 
 if __name__ == "__main__":
     main()
