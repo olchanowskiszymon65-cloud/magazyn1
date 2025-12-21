@@ -24,50 +24,74 @@ def main():
     # 1. Konfiguracja strony
     st.set_page_config(page_title="magazyn", layout="centered")
 
-    # 2. Stylizacja CSS (Kolory i tło z ciężarówką)
+    # 2. Zaawansowana stylizacja CSS
     st.markdown("""
         <style>
-        /* Tło z ciężarówką */
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap');
+
+        /* Ustawienie czcionki dla całej aplikacji */
+        html, body, [class*="css"], .stMarkdown, p, div {
+            font-family: 'Montserrat', sans-serif !important;
+        }
+
+        /* Tło z europejską ciężarówką w magazynie */
         .stApp {
-            background: linear-gradient(rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.1)), 
-            url("https://images.unsplash.com/photo-1519003722824-194d4455a60c?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&q=80");
+            background: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), 
+            url("https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&q=80");
             background-size: cover;
             background-position: center;
             background-attachment: fixed;
         }
 
-        /* Stylizacja nagłówka głównego */
+        /* Napis magazyn na górze */
         .main-title {
-            font-size: 50px !important;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 64px !important;
             font-weight: 700 !important;
-            color: #1E1E1E !important;
+            color: #ffffff !important;
             text-align: center;
-            margin-bottom: 30px;
-            text-transform: lowercase;
+            margin-top: -50px;
+            margin-bottom: 20px;
+            letter-spacing: 2px;
         }
 
-        /* Półprzezroczyste kontenery dla czytelności */
-        div[data-testid="stVerticalBlock"] > div:has(div.stMetric), 
-        .stForm, .stDataFrame {
-            background-color: rgba(255, 255, 255, 0.9);
-            padding: 20px;
-            border-radius: 15px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        /* Kontenery z treścią - białe, solidne dla czytelności */
+        [data-testid="stMetric"], .stForm, .stDataFrame, [data-testid="stExpander"] {
+            background-color: rgba(255, 255, 255, 0.95) !important;
+            padding: 20px !important;
+            border-radius: 12px !important;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3) !important;
+            color: #1E1E1E !important;
         }
         
-        /* Stylizacja przycisków */
+        /* Poprawa widoczności etykiet w metrykach */
+        [data-testid="stMetricLabel"] {
+            color: #444444 !important;
+            font-weight: 600 !important;
+        }
+
+        /* Przycisk dodawania */
         .stButton>button {
-            border-radius: 8px;
-            border: none;
-            font-weight: 600;
+            width: 100%;
+            background-color: #2E7D32 !important;
+            color: white !important;
+            border: none !important;
+            padding: 10px !important;
+            font-weight: 700 !important;
+        }
+
+        /* Przycisk usuwania */
+        [data-testid="stExpander"] button {
+            background-color: #C62828 !important;
+            color: white !important;
         }
         </style>
     """, unsafe_allow_html=True)
 
-    # Napis na górze (bez nawiasów i ikon)
-    st.markdown('<p class="main-title">magazyn</p>', unsafe_allow_html=True)
+    # Czysty napis na górze
+    st.markdown('<h1 class="main-title">magazyn</h1>', unsafe_allow_html=True)
 
-    # Wczytanie danych
+    # Wczytanie danych z pliku (bez sesji)
     inventory_df = load_data()
 
     # --- STATYSTYKI ---
@@ -75,45 +99,40 @@ def main():
     total_units = inventory_df['Ilość'].sum() if not inventory_df.empty else 0
 
     col1, col2 = st.columns(2)
-    col1.metric("Rodzaje towarów", total_types)
-    col2.metric("Suma sztuk", total_units)
+    with col1:
+        st.metric("Modele produktów", total_types)
+    with col2:
+        st.metric("Łączna ilość sztuk", total_units)
 
-    st.write("") # Odstęp
+    st.write("") 
 
     # --- DODAWANIE ---
     with st.form("add_form", clear_on_submit=True):
-        st.subheader("Dodaj nową dostawę")
-        c1, c2 = st.columns([3, 1])
-        name_input = c1.text_input("Nazwa przedmiotu")
-        qty_input = c2.number_input("Ilość", min_value=1, step=1)
+        st.markdown("### 📥 Nowa dostawa")
+        name_input = st.text_input("Nazwa przedmiotu", placeholder="np. Paleta EUR")
+        qty_input = st.number_input("Ilość (szt.)", min_value=1, step=1)
         
-        if st.form_submit_button("Zatwierdź"):
+        if st.form_submit_button("DODAJ DO MAGAZYNU"):
             if name_input.strip():
                 new_entry = pd.DataFrame([{'Nazwa': name_input.strip(), 'Ilość': int(qty_input)}])
                 updated_df = pd.concat([inventory_df, new_entry], ignore_index=True)
                 save_data(updated_df)
             else:
-                st.error("Wpisz nazwę!")
+                st.error("Wpisz nazwę produktu!")
 
-    # --- WYŚWIETLANIE I USUWANIE ---
+    # --- LISTA I USUWANIE ---
     if not inventory_df.empty:
         st.write("")
-        st.subheader("Aktualna lista")
+        st.markdown("### 📦 Aktualny stan")
         
         display_df = inventory_df.copy()
         display_df.insert(0, 'ID', range(1, len(display_df) + 1))
         
-        # Tabela
+        # Tabela danych
         st.dataframe(display_df, use_container_width=True, hide_index=True)
 
-        # Usuwanie
-        with st.expander("Panel zarządzania"):
+        # Panel usuwania
+        with st.expander("🗑️ Zarządzaj brakami / Usuń towar"):
             id_to_del = st.selectbox("Wybierz ID do usunięcia", display_df['ID'].tolist())
-            if st.button("Usuń trwale", type="primary"):
-                updated_df = inventory_df.drop(inventory_df.index[id_to_del - 1]).reset_index(drop=True)
-                save_data(updated_df)
-    else:
-        st.info("Brak towarów w magazynie.")
-
-if __name__ == "__main__":
-    main()
+            if st.button("USUŃ Z EWIDENCJI"):
+                updated_df = inventory_df.drop(inventory_df.index[id_to_del
