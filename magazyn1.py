@@ -1,25 +1,26 @@
-
-        
 import streamlit as st
 import pandas as pd
 
 # --- 1. KONFIGURACJA STRONY ---
 st.set_page_config(page_title="magazyn", layout="centered")
 
-# Inicjalizacja danych w pamięci (znikną po F5)
+# Inicjalizacja danych w pamięci (bez zapisu do pliku, reset po F5)
 if 'inventory' not in st.session_state:
     st.session_state.inventory = pd.DataFrame(columns=['Nazwa', 'Ilość'])
 
-# --- 2. STYLIZACJA CSS ---
+# --- 2. STYLIZACJA CSS (MAKSYMALNA WIDOCZNOŚĆ) ---
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;800&display=swap');
 
+    /* Globalne ustawienia czcionki - bardzo gruba i czarna */
     html, body, [class*="css"], .stMarkdown, p, div, label, .stMetric {
         font-family: 'Montserrat', sans-serif !important;
         color: #000000 !important;
+        font-weight: 600 !important;
     }
 
+    /* Tło z ciężarówką */
     .stApp {
         background: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), 
         url("https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=2000&auto=format&fit=crop");
@@ -28,32 +29,65 @@ st.markdown("""
         background-attachment: fixed;
     }
 
+    /* Tytuł główny */
     .main-title {
-        font-size: 80px !important;
-        font-weight: 700 !important;
+        font-size: 85px !important;
+        font-weight: 800 !important;
         color: #ffffff !important;
         text-align: center;
         margin-top: -50px;
-        margin-bottom: 30px;
+        margin-bottom: 40px;
         text-transform: lowercase;
-        letter-spacing: -2px;
+        letter-spacing: -3px;
     }
 
-    [data-testid="stMetric"], .stForm, .stDataFrame, div[data-testid="stTextInput"], .inventory-item {
+    /* Kontenery - czysta biel, grube obramowanie dla widoczności */
+    [data-testid="stMetric"], .stForm, .inventory-row {
         background-color: #ffffff !important;
-        padding: 15px !important;
-        border-radius: 12px !important;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
-        margin-bottom: 10px;
+        padding: 20px !important;
+        border-radius: 15px !important;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.6) !important;
+        border: 2px solid #000000;
+        margin-bottom: 15px;
     }
 
-    /* Ukrycie elementów Streamlit */
+    /* Stylizacja tekstu na liście - DUŻA CZCIONKA */
+    .item-text {
+        font-size: 22px !important;
+        font-weight: 800 !important;
+        color: #000000 !important;
+    }
+
+    /* Ukrycie elementów systemowych */
     #MainMenu, footer, header {visibility: hidden;}
 
-    /* Przyciski */
-    div.stButton > button {
-        font-weight: 700 !important;
-        border-radius: 8px !important;
+    /* KOLORY PRZYCISKÓW */
+    /* Główny przycisk dodawania (Ciemny zielony) */
+    .stButton > button {
+        border-radius: 10px !important;
+        font-size: 18px !important;
+        height: 3em !important;
+    }
+
+    /* Przycisk PLUS */
+    div[data-testid="stHorizontalBlock"] div:nth-child(3) button {
+        background-color: #28a745 !important;
+        color: white !important;
+        border: none !important;
+    }
+
+    /* Przycisk MINUS */
+    div[data-testid="stHorizontalBlock"] div:nth-child(4) button {
+        background-color: #fd7e14 !important;
+        color: white !important;
+        border: none !important;
+    }
+
+    /* Przycisk USUŃ */
+    div[data-testid="stHorizontalBlock"] div:nth-child(5) button {
+        background-color: #dc3545 !important;
+        color: white !important;
+        border: none !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -62,53 +96,56 @@ st.markdown("""
 
 st.markdown('<h1 class="main-title">magazyn</h1>', unsafe_allow_html=True)
 
-# Statystyki
+# Statystyki (Duże i wyraźne)
 df = st.session_state.inventory
 c1, c2 = st.columns(2)
-c1.metric("Towary", len(df))
-c2.metric("Suma sztuk", int(df['Ilość'].sum() if not df.empty else 0))
+c1.metric("RODZAJE", len(df))
+c2.metric("ŁĄCZNIE SZTUK", int(df['Ilość'].sum() if not df.empty else 0))
 
-# --- SYSTEM DODAWANIA ---
-with st.form("quick_add", clear_on_submit=True):
-    st.markdown("### 📥 Przyjmij towar")
-    col_n, col_q, col_b = st.columns([3, 1, 1])
-    n = col_n.text_input("Nazwa")
-    q = col_q.number_input("Ilość", min_value=1, step=1)
-    if col_b.form_submit_button("DODAJ"):
+st.write("")
+
+# --- FORMULARZ PRZYJĘCIA ---
+with st.form("add_new", clear_on_submit=True):
+    st.markdown("### 📥 DODAJ TOWAR DO LISTY")
+    col_n, col_q = st.columns([3, 1])
+    n = col_n.text_input("NAZWA PRODUKTU")
+    q = col_q.number_input("ILOŚĆ", min_value=1, step=1)
+    if st.form_submit_button("ZATWIERDŹ DOSTAWĘ"):
         if n.strip():
-            # Jeśli towar istnieje - dodaj ilość, jeśli nie - stwórz nowy
             if n.strip() in st.session_state.inventory['Nazwa'].values:
                 st.session_state.inventory.loc[st.session_state.inventory['Nazwa'] == n.strip(), 'Ilość'] += q
             else:
-                new_data = pd.DataFrame([{'Nazwa': n.strip(), 'Ilość': q}])
-                st.session_state.inventory = pd.concat([st.session_state.inventory, new_data], ignore_index=True)
+                new_entry = pd.DataFrame([{'Nazwa': n.strip(), 'Ilość': q}])
+                st.session_state.inventory = pd.concat([st.session_state.inventory, new_entry], ignore_index=True)
             st.rerun()
 
-st.divider()
+st.write("")
 
-# --- POPRAWIONY SYSTEM ZARZĄDZANIA (LISTA) ---
+# --- LISTA TOWARÓW Z PRZYCISKAMI ---
 if not st.session_state.inventory.empty:
-    st.markdown("### 📦 Stan i szybka edycja")
+    st.markdown("### 📋 AKTUALNA LISTA (EDYCJA KLIKNIĘCIEM)")
     
     for index, row in st.session_state.inventory.iterrows():
-        # Tworzymy wiersz dla każdego produktu z przyciskami + i -
-        with st.container():
-            col_name, col_qty, col_plus, col_minus, col_del = st.columns([3, 1, 1, 1, 1])
+        # Każdy produkt w osobnym, wyraźnym białym pasku
+        st.markdown('<div class="inventory-row">', unsafe_allow_html=True)
+        col_name, col_qty, col_plus, col_minus, col_del = st.columns([3, 2, 1, 1, 1])
+        
+        col_name.markdown(f'<p class="item-text">{row["Nazwa"]}</p>', unsafe_allow_html=True)
+        col_qty.markdown(f'<p class="item-text">{row["Ilość"]} SZT.</p>', unsafe_allow_html=True)
+        
+        if col_plus.button("➕", key=f"p_{index}"):
+            st.session_state.inventory.at[index, 'Ilość'] += 1
+            st.rerun()
             
-            col_name.write(f"**{row['Nazwa']}**")
-            col_qty.write(f"{row['Ilość']} szt.")
-            
-            if col_plus.button("➕", key=f"plus_{index}"):
-                st.session_state.inventory.at[index, 'Ilość'] += 1
+        if col_minus.button("➖", key=f"m_{index}"):
+            if st.session_state.inventory.at[index, 'Ilość'] > 0:
+                st.session_state.inventory.at[index, 'Ilość'] -= 1
                 st.rerun()
-                
-            if col_minus.button("➖", key=f"minus_{index}"):
-                if st.session_state.inventory.at[index, 'Ilość'] > 0:
-                    st.session_state.inventory.at[index, 'Ilość'] -= 1
-                    st.rerun()
-            
-            if col_del.button("🗑️", key=f"del_{index}"):
-                st.session_state.inventory = st.session_state.inventory.drop(index).reset_index(drop=True)
-                st.rerun()
+        
+        if col_del.button("🗑️", key=f"d_{index}"):
+            st.session_state.inventory = st.session_state.inventory.drop(index).reset_index(drop=True)
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 else:
-    st.write("Magazyn jest pusty.")
+    st.markdown('<div class="inventory-row"><p class="item-text">BRAK TOWARÓW W SYSTEMIE</p></div>', unsafe_allow_html=True)
+        
